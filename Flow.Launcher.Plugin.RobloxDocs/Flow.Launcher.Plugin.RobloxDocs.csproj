@@ -34,4 +34,8 @@
         <PackageReference Include="FuzzySharp" Version="2.0.2" />
     </ItemGroup>
 
+    <ItemGroup>
+      <Folder Include=".github\" />
+    </ItemGroup>
+
 </Project>
