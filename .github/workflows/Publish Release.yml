@@ -34,7 +34,7 @@ jobs:
       - name: Restore Dependencies
         run: |
           cd Flow.Launcher.Plugin.RobloxDocs
-          dot-net restore
+          dotnet restore
         
       - name: Build
         run: |
