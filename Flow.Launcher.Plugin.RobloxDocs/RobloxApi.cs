@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
@@ -22,18 +23,24 @@ public class RobloxApi {
     private const string ApiDocsUrl =
         "https://raw.githubusercontent.com/MaximumADHD/Roblox-Client-Tracker/roblox/api-docs/en-us.json";
 
+    private const string IconListUrl =
+        "https://api.github.com/repos/Cens-r/flow-roblox-docs/contents/Flow.Launcher.Plugin.RobloxDocs/images";
+    private const string IconUrlTemplate =
+        "https://cdn.jsdelivr.net/gh/MaximumADHD/Roblox-Client-Tracker/QtResources/icons/Dark/Roblox/16/2x/{0}.png";
+
     private ApiDump _api;
     private Dictionary<string, DocEntry> _docs;
     private List<ApiRecord> _active;
     private List<ApiRecord> _deprecated;
     private HashSet<string> _datatypes = new();
+    private HashSet<string> _icons = new();
 
-    private static readonly HttpClient HttpClient = new();
-
-    private static readonly string PluginDirectory =
-        Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
-    private static readonly string ImagesDirectory = Path.Combine(PluginDirectory, "images");
-
+    private static readonly HttpClient HttpClient = new() {
+        DefaultRequestHeaders = {
+            UserAgent = { new ProductInfoHeaderValue("FlowRobloxPlugin", "1.0") }
+        }
+    };
+    
     private static async Task<T> FetchJson<T>(string url) {
         var response = await HttpClient.GetAsync(url);
         response.EnsureSuccessStatusCode();
@@ -42,14 +49,9 @@ public class RobloxApi {
         return JsonSerializer.Deserialize<T>(json);
     }
 
-    private static async Task<string> GetCurrentVersion() {
+    public static async Task<string> GetCurrentVersion() {
         var versions = await FetchJson<Dictionary<string, string>>(CurrentVersionUrl);
         return versions["clientVersionUpload"];
-    }
-
-    private static string GetImagePath(string name) {
-        var path = Path.Combine(ImagesDirectory, $"{name}.png");
-        return File.Exists(path) ? path : Path.Combine(ImagesDirectory, "Placeholder.png");
     }
 
     private static async Task<ApiDump> FetchApiDump() {
@@ -62,7 +64,16 @@ public class RobloxApi {
         return await FetchJson<Dictionary<string, DocEntry>>(ApiDocsUrl);
     }
 
-    private void ConstructRecord(string type, DescriptionBase info, string className = null, string image = null) {
+    private static async Task<List<IconInfo>> FetchIconList() {
+        return await FetchJson<List<IconInfo>>(IconListUrl);
+    }
+    
+    public string GetImagePath(string name) {
+        if (!_icons.Contains(name)) { name = "Placeholder"; }
+        return string.Format(IconUrlTemplate, name);
+    }
+
+    private void ConstructRecord(string type, DescriptionBase info, string className = null, string imagePath = null) {
         var docKey = $"@roblox/{type}/" + (className != null ? $"{className}.{info.Name}" : info.Name);
         if (!_docs.TryGetValue(docKey, out var docsEntry)) { return; }
 
@@ -71,9 +82,9 @@ public class RobloxApi {
             new ApiRecord(
             new List<string> { info.Name, className },
             docsEntry.Description,
+            info.Tags,
             docsEntry.Url,
-            image,
-            info.Tags)
+            imagePath)
         );
 
         if (className != null && info is MemberDump member) {
@@ -86,23 +97,28 @@ public class RobloxApi {
 
     public async Task LoadRecords(PluginInitContext context) {
         _datatypes.Clear();
+        _icons.Clear();
         
         _api = await FetchApiDump();
         _docs = await FetchApiDocs();
-
+        context.API.LogInfo("RBX", "Before FetchIconList");
+        var icons = await FetchIconList();
+        _icons = icons.Select(icon => Path.GetFileNameWithoutExtension(icon.Name)).ToHashSet();
+        context.API.LogInfo("RBX", "After FetchIconList");
+        
         _active = new List<ApiRecord>();
         _deprecated = new List<ApiRecord>();
 
         foreach (var classEntry in _api.Classes) {
             var classImage = GetImagePath(classEntry.Name);
-            ConstructRecord("globaltype", classEntry, null, classImage);
+            ConstructRecord("globaltype", classEntry, imagePath: classImage);
             classEntry.Members.ForEach(memberEntry => {
                 ConstructRecord("globaltype", memberEntry, classEntry.Name, classImage);
             });
         }
         
         var enumImage = GetImagePath("Enum");
-        var memberImage = GetImagePath("EnumMember");
+        var memberImage = GetImagePath("EnuMember");
         
         foreach (var enumEntry in _api.Enums) {
             ConstructRecord("global", enumEntry, "Enum", enumImage);
@@ -110,15 +126,16 @@ public class RobloxApi {
         }
         
         var typeImage = GetImagePath("ACCodeSnippet");
+        
         foreach (var datatype in _datatypes) {
             var dictKey = $"@roblox/global/{datatype}";
             if (!_docs.TryGetValue(dictKey, out var docsEntry)) { continue; }
             _active.Add(new ApiRecord(
-                new List<string>() { datatype },
+                new List<string> { datatype },
                 docsEntry.Description,
+                new List<string>(),
                 docsEntry.Url,
-                typeImage,
-                new List<string>())
+                typeImage)
             );
         }
     }
@@ -177,6 +194,14 @@ public record DescriptionBase {
     public DescriptionBase() {
         Name = string.Empty;
         Tags = new List<string>();
+    }
+};
+
+public record IconInfo {
+    [JsonPropertyName("name")] public string Name { get; init; }
+    
+    public IconInfo() {
+        Name = string.Empty;
     }
 };
 
@@ -258,20 +283,21 @@ public record ApiRecord : DescriptionBase {
     [CanBeNull] public string ClassName { get; init; }
     public string Description { get; init; }
     public string Url { get; init; }
-    public string ImagePath { get; init; }
-
+    public string ImagePath {get; init; }
+    
     public string GetFullName() {
         return ClassName != null ? $"{ClassName}.{Name}" : Name;
     }
 
-    public ApiRecord(List<string> name, string description, string url, string image, List<string> tags) {
+    public ApiRecord(List<string> name, string description, List<string> tags, string url, string imagePath) {
         Name = name[0];
-        ClassName = name.Count > 1 ? name[1] : null;
-        Description = description;
-        Url = url;
-        ImagePath = image;
         Tags = tags;
+        
+        Description = description;
+        ClassName = name.Count > 1 ? name[1] : null;
+        Url = url;
+        ImagePath = imagePath;
     }
 
-    public ApiRecord() : this(new List<string>(), string.Empty, string.Empty, string.Empty, new List<string>()) {}
+    public ApiRecord() : this(new List<string>(), string.Empty, new List<string>(), string.Empty, string.Empty) {}
 }
