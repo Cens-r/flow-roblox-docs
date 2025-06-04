@@ -26,7 +26,7 @@ namespace Flow.Launcher.Plugin.RobloxDocs {
         }
 
         public async Task<List<Result>> QueryAsync(Query query, CancellationToken token) {
-            await _loader; // Ensure loader has finished before processing queries
+            await _loader; // Ensure the loader has finished before processing queries
             
             var results = new List<Result>();
             var records = _api.Search(
@@ -34,8 +34,6 @@ namespace Flow.Launcher.Plugin.RobloxDocs {
                 _settings.MaxResults,
                 _settings.ScoreThreshold,
                 _settings.ShowDeprecated);
-
-            _context.API.LogInfo($"RBX: {query.Search}", records.Count.ToString());
             
             for (var index = 0; index < records.Count; index++) {
                 var (record, score) = records[index];

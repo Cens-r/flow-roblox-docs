@@ -24,7 +24,7 @@ public class RobloxApi {
         "https://raw.githubusercontent.com/MaximumADHD/Roblox-Client-Tracker/roblox/api-docs/en-us.json";
 
     private const string IconListUrl =
-        "https://api.github.com/repos/Cens-r/flow-roblox-docs/contents/Flow.Launcher.Plugin.RobloxDocs/images";
+        "https://api.github.com/repos/MaximumADHD/Roblox-Client-Tracker/contents/QtResources/icons/Dark/Roblox/16/2x";
     private const string IconUrlTemplate =
         "https://cdn.jsdelivr.net/gh/MaximumADHD/Roblox-Client-Tracker/QtResources/icons/Dark/Roblox/16/2x/{0}.png";
 
@@ -32,13 +32,14 @@ public class RobloxApi {
     private Dictionary<string, DocEntry> _docs;
     private List<ApiRecord> _active;
     private List<ApiRecord> _deprecated;
-    private HashSet<string> _datatypes = new();
+    private readonly HashSet<string> _datatypes = new();
     private HashSet<string> _icons = new();
 
     private static readonly HttpClient HttpClient = new() {
         DefaultRequestHeaders = {
             UserAgent = { new ProductInfoHeaderValue("FlowRobloxPlugin", "1.0") }
-        }
+        },
+        Timeout = TimeSpan.FromSeconds(10)
     };
     
     private static async Task<T> FetchJson<T>(string url) {
@@ -102,8 +103,13 @@ public class RobloxApi {
         _api = await FetchApiDump();
         _docs = await FetchApiDocs();
         context.API.LogInfo("RBX", "Before FetchIconList");
-        var icons = await FetchIconList();
-        _icons = icons.Select(icon => Path.GetFileNameWithoutExtension(icon.Name)).ToHashSet();
+        try {
+            var icons = await FetchIconList();
+            _icons = icons.Select(icon => Path.GetFileNameWithoutExtension(icon.Name)).ToHashSet();
+        } catch (Exception e) {
+            _icons = new HashSet<string>();
+            context.API.LogException("RBX", "Failed to FetchIconList", e);
+        }
         context.API.LogInfo("RBX", "After FetchIconList");
         
         _active = new List<ApiRecord>();
