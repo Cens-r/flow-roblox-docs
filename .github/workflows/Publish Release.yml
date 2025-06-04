@@ -1,26 +1,19 @@
 name: Publish Release
 
-permissions: 
-  contents: write
-
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
-    paths: 
-      - 'plugins.json'
+    branches: [ "master" ]
+    paths: [ "Flow.Launcher.Plugin.RobloxDocs" ]
 
 jobs:
   publish:
     runs-on: windows-latest
-  
-    steps:
-      - uses: actions/checkout@v3
+    permissions:
+      contents: write
 
-      - name: Setup .Net
-        uses: 'actions/setup-dotnet@v3'
-        with:
-          dotnet-version: 7.0.x
+    steps:
+      - uses: actions/checkout@v4
       
       - name: Get Version
         id: version
@@ -28,8 +21,11 @@ jobs:
         with:
           path: 'Flow.Launcher.Plugin.RobloxDocs/plugin.json'
           prop_path: 'Version'
-          
-      - run: echo ${{steps.version.outputs.prop}}
+
+      - name: Setup .Net
+        uses: 'actions/setup-dotnet@v4'
+        with:
+          dotnet-version: 7.0.x
       
       - name: Restore Dependencies
         run: |
@@ -38,12 +34,11 @@ jobs:
         
       - name: Build
         run: |
-          cd Flow.Launcher.Plugin.RobloxDocs
-          dotnet publish -c Release -r win-x64 --no-self-contained Flow.Launcher.Plugin.RobloxDocs.csproj
-          7z a -tzip "Flow.Launcher.Plugin.RobloxDocs.zip" "./bin/Release/win-x64/publish/*"
+          dotnet publish Flow.Launcher.Plugin.RobloxDocs -c Release -r win-x64 -o "build"
+          7z a -tzip "Flow.Launcher.Plugin.RobloxDocs-${{ steps.version.outputs.prop }}.zip" "./build/*"
       
       - name: Publish
         uses: softprops/action-gh-release@v1
         with:
-          files: "Flow.Launcher.Plugin.RobloxDocs.zip"
+          files: Flow.Launcher.Plugin.RobloxDocs-${{ steps.version.outputs.prop }}.zip
           tag_name: "v${{steps.version.outputs.prop}}"
