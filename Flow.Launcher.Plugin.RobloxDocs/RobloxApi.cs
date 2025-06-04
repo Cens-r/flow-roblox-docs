@@ -102,7 +102,6 @@ public class RobloxApi {
         
         _api = await FetchApiDump();
         _docs = await FetchApiDocs();
-        context.API.LogInfo("RBX", "Before FetchIconList");
         try {
             var icons = await FetchIconList();
             _icons = icons.Select(icon => Path.GetFileNameWithoutExtension(icon.Name)).ToHashSet();
@@ -110,7 +109,6 @@ public class RobloxApi {
             _icons = new HashSet<string>();
             context.API.LogException("RBX", "Failed to FetchIconList", e);
         }
-        context.API.LogInfo("RBX", "After FetchIconList");
         
         _active = new List<ApiRecord>();
         _deprecated = new List<ApiRecord>();
