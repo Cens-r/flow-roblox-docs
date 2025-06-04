@@ -1,0 +1,2 @@
+dotnet publish Flow.Launcher.Plugin.flow_roblox_docs -c Release -r win-x64 --no-self-contained
+Compress-Archive -LiteralPath Flow.Launcher.Plugin.flow_roblox_docs/bin/Release/win-x64/publish -DestinationPath Flow.Launcher.Plugin.flow_roblox_docs/bin/flow_roblox_docs.zip -Force
